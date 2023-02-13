@@ -4,7 +4,8 @@ mod device;
 mod command;
 mod socket;
 mod event;
-
+#[macro_use]
+extern crate lazy_static;
 fn main() {
     let args: Vec<String> = env::args().collect();
     let arg1 = &args[1];
@@ -12,14 +13,14 @@ fn main() {
     let command=arg1.as_str().into();
     match command 
     {
-        Command::Connect(ip)=>{
+        Command::Connect(_)=>{
             if args.len()>2 {
                 Command::Connect(args[2].as_str()).run();
                 return;
             }
             command.run();
         },
-        Command::Start(device)=>{
+        Command::Start(_)=>{
             if args.len()>2 {
                 Command::Start(&Some(args[2].clone())).run();
             }
