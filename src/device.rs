@@ -1,128 +1,145 @@
 #![allow(clippy::let_unit_value)]
-use bluest::{Adapter, Device, AdvertisingDevice};
-use blurz::bluetooth_adapter::BluetoothAdapter;
-use blurz::bluetooth_device::BluetoothDevice;
-use blurz::bluetooth_discovery_session::BluetoothDiscoverySession;
-use blurz::bluetooth_session::BluetoothSession;
+use bluest::{Adapter, AdvertisingDevice, Device, Uuid};
+use tokio::sync::RwLock;
+use std::error::Error;
 use std::mem::MaybeUninit;
 use std::sync::Once;
 use std::thread;
 use std::time::Duration;
+use tokio_stream::StreamExt;
 
-pub fn scan_device() {
-    let bt_session = &BluetoothSession::create_session(None).unwrap();
-    let adapter: BluetoothAdapter = BluetoothAdapter::init(bt_session).unwrap();
-    let adapter_id = adapter.get_id();
-    // 创建蓝牙搜索的Session
-    let discover_session =
-        BluetoothDiscoverySession::create_session(&bt_session, adapter_id).unwrap();
-    // 开始扫描设备
-    discover_session.start_discovery().unwrap();
-    print!("扫描中....");
-    // 等待几秒
-    thread::sleep(Duration::from_secs(10));
-    // 获取设备列便
-    let device_list = adapter.get_device_list().unwrap();
-    // 结束扫描
-    // discover_session.stop_discovery().unwrap();
+lazy_static! {
+    pub static ref UUID_STR_VEC: RwLock<Vec<String>> = RwLock::new(Vec::new());
+}
 
-    for device_path in device_list {
-        let device = BluetoothDevice::new(bt_session, device_path.to_string());
+
+pub async fn scan_device() {
+    let adapter = Adapter::default()
+        .await
+        .ok_or("Bluetooth adapter not found")
+        .unwrap();
+    adapter.wait_available().await;
+
+    println!("starting scan");
+    let mut scan = adapter.scan(&[]).await.unwrap();
+    println!("scan started");
+    while let Some(discovered_device) = scan.next().await {
         println!(
-            "Device: {:?} Name: {:?}, RSSI: {:?}",
-            device_path,
-            device.get_name().ok(),
-            device.get_rssi().ok()
+            "{:?}:{:?}:{:?}",
+            discovered_device
+                .device
+                .name_async()
+                .await
+                .unwrap_or("undefind".to_string()),
+            discovered_device.device.id(),
+            discovered_device.adv_data
         );
     }
 }
 
 // 连接蓝牙
-fn connect_device<'a>(bt_session: &'a BluetoothSession, address: &'a str) -> BluetoothDevice<'a> {
-    let device = BluetoothDevice::new(
-        bt_session,
-        String::from(address), // mmc
+pub async fn connect_device(device:&Device){
+    let adapter = Adapter::default()
+        .await
+        .ok_or("Bluetooth adapter not found")
+        .unwrap();
+    println!(
+        "{:?}:{:?}",
+        device.name_async().await, device.id()
     );
-
-    if let Err(e) = device.connect(10000) {
-        println!("Failed to connect {:?}: {:?}", device.get_id(), e);
-    } else {
-        println!("Connected!");
-    }
-    device
+    let _=adapter.connect_device(device).await;
+    println!("connected!");
 }
 
 // 断开蓝牙
-fn disconnect_device(device: &BluetoothDevice) {
-    if let Err(e) = device.disconnect() {
-        println!("Failed to connect {:?}: {:?}", device.get_id(), e);
-    } else {
-        println!("Disconnected!");
-    }
-}
-
-// 获取蓝牙
-pub fn lock_device(device: String) -> &'static String {
-    static mut DEVICE: MaybeUninit<String> = MaybeUninit::uninit();
-    static LOCK: Once = Once::new();
-    LOCK.call_once(|| unsafe {
-        DEVICE.as_mut_ptr().write(device);
-    });
-    unsafe { &*DEVICE.as_ptr() }
-}
-
-
-use tokio_stream::StreamExt;
-pub async  fn a()  -> Result<(),&'static str>{
+pub async fn disconnect_device(device:&Device) {
     let adapter = Adapter::default()
+        .await
+        .ok_or("Bluetooth adapter not found")
+        .unwrap();
+    println!(
+        "{:?}:{:?}",
+        device.name_async().await, device.id()
+    );
+    adapter.disconnect_device(device);
+}
+
+// 锁定蓝牙设备
+pub async fn lock_device(services: &[Uuid]) -> (Vec<String>,Device) {
+    let device_id = {
+        let adapter = Adapter::default().await.unwrap();
+        adapter.wait_available().await.unwrap();
+        println!("looking for device");
+        let device = adapter
+            .discover_devices(services)
+            .await.unwrap()
+            .next()
             .await
-            .ok_or("Bluetooth adapter not found").unwrap();
+            .ok_or("Failed to discover device").unwrap().unwrap();
+        println!(
+            "found device: {} ({:?})",
+            device.name_async().await.as_deref().unwrap_or("(unknown)"),
+            device.id()
+        );
+
+        device.id()
+    };
+    println!("Time passes...");
+    tokio::time::sleep(Duration::from_secs(5)).await;
+    {
+        let adapter = Adapter::default().await.unwrap();
         adapter.wait_available().await;
 
-        println!("starting scan");
-        let mut scan = adapter.scan(&[]).await.unwrap();
-        println!("scan started");
-        Ok(while let Some(discovered_device) = scan.next().await {
-            println!("{:?}",discovered_device);
-            // println!(
-            //     "{}{}: {:?}",
-            //     discovered_device
-            //         .device
-            //         .name()
-            //         .as_deref()
-            //         .unwrap_or("(unknown)"),
-            //     discovered_device
-            //         .rssi
-            //         .map(|x| format!(" ({}dBm)", x))
-            //         .unwrap_or_default(),
-            //     discovered_device.adv_data.services
-            // );
-        })
+        println!("re-opening previously found device");
+        let device = adapter.open_device(&device_id).await.unwrap();
+        println!(
+            "re-opened device: {} ({:?})",
+            device.name_async().await.as_deref().unwrap_or("(unknown)"),
+            device.id()
+        );
+        let services=services.clone();
+        for uuid in services {
+            UUID_STR_VEC.write().await.push(uuid.to_string());
+        }
+        (UUID_STR_VEC.read().await.to_vec(),device)
+    }
 }
-
 
 #[cfg(test)]
 mod tests {
-    use bluest::Adapter;
+    use bluest::{btuuid, Adapter, Uuid};
+    use serde::__private::de;
 
     use super::*;
-
-    #[test]
-    fn test_connect_device() {
-        let bt_session = &BluetoothSession::create_session(None).unwrap();
-        connect_device(bt_session, "/org/bluez/hci0/dev_41_42_8C_A9_68_60");
+    #[tokio::test]
+    async fn test_scan() {
+        let a = scan_device().await;
     }
-    #[test]
-    fn test_disconnect_device() {
-        let bt_session = &BluetoothSession::create_session(None).unwrap();
-        let device: BluetoothDevice =
-            connect_device(bt_session, "/org/bluez/hci0/dev_41_42_8C_A9_68_60");
-        disconnect_device(&device);
+
+     fn get_device() -> Device{
+        let services= &[
+            Uuid::parse_str("0000110e-0000-1000-8000-00805f9b34fb").unwrap(),
+            Uuid::parse_str("0000110b-0000-1000-8000-00805f9b34fb").unwrap(),
+            Uuid::parse_str("0000111e-0000-1000-8000-00805f9b34fb").unwrap(),
+            Uuid::parse_str("0000110c-0000-1000-8000-00805f9b34fb").unwrap(),
+        ];
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let future = lock_device(services);
+        let (services,device)=rt.block_on(future);
+        device
+    }
+
+
+    #[tokio::test]
+    async fn test_connect_device() {
+        let device=get_device();
+        connect_device(&device).await;
     }
 
     #[tokio::test]
-    async fn  test_disconnect_device1(){
-        let a =a().await;
-        println!("a:{:?}",a)
+    async fn test_disconnect_device() {
+        let device=get_device();
+        disconnect_device(&device);
     }
+
 }
