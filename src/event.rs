@@ -6,6 +6,8 @@ use std::{
 
 use mouse_position::mouse_position::Mouse;
 
+use crate::os::get_system_metrics;
+
 lazy_static! {
     pub static ref STATE: RwLock<u8> = RwLock::new(0);
 }
@@ -25,7 +27,7 @@ pub fn watch_mouse() {
         while STATE.read().unwrap().eq(&0){
             let (x,y)=get_mouse_coordinate().unwrap();
             println!("{},{}",x,y);
-            todo!("获取屏幕分辨率");
+            let (width,height)=get_system_metrics();
             todo!("判断当前鼠标是否达到屏幕边界");
             thread::sleep(Duration::from_millis(500));
         }

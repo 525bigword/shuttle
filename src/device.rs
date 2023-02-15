@@ -1,10 +1,6 @@
 #![allow(clippy::let_unit_value)]
-use bluest::{Adapter, AdvertisingDevice, Device, Uuid};
+use bluest::{Adapter, Device, Uuid};
 use tokio::sync::RwLock;
-use std::error::Error;
-use std::mem::MaybeUninit;
-use std::sync::Once;
-use std::thread;
 use std::time::Duration;
 use tokio_stream::StreamExt;
 
@@ -107,13 +103,12 @@ pub async fn lock_device(services: &[Uuid]) -> (Vec<String>,Device) {
 
 #[cfg(test)]
 mod tests {
-    use bluest::{btuuid, Adapter, Uuid};
-    use serde::__private::de;
+    use bluest::{Uuid};
 
     use super::*;
     #[tokio::test]
     async fn test_scan() {
-        let a = scan_device().await;
+        scan_device().await;
     }
 
      fn get_device() -> Device{
@@ -125,7 +120,7 @@ mod tests {
         ];
         let rt = tokio::runtime::Runtime::new().unwrap();
         let future = lock_device(services);
-        let (services,device)=rt.block_on(future);
+        let (_services,device)=rt.block_on(future);
         device
     }
 
@@ -139,7 +134,7 @@ mod tests {
     #[tokio::test]
     async fn test_disconnect_device() {
         let device=get_device();
-        disconnect_device(&device);
+        disconnect_device(&device).await;
     }
 
 }

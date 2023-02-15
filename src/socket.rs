@@ -17,7 +17,7 @@ lazy_static! {
     static ref SENDER_LIST: RwLock<HashMap<Token,Sender>> = RwLock::new(HashMap::new());
 }
 pub async fn start(services: &[Uuid]) {
-    let (uuid_str_vec,device)=lock_device(services).await;
+    let (_uuid_str_vec,device)=lock_device(services).await;
     println!("已锁定设备:{}",device);
     let rt = tokio::runtime::Runtime::new().unwrap();
     let listen=listen("127.0.0.1:20426", |sender| {
@@ -165,7 +165,6 @@ impl Socket{
 #[cfg(test)]
 mod tests {
 
-    use winapi::um::winuser::GetSystemMetrics;
 
     use super::*;
 
@@ -177,7 +176,7 @@ mod tests {
             Uuid::parse_str("0000111e-0000-1000-8000-00805f9b34fb").unwrap(),
             Uuid::parse_str("0000110c-0000-1000-8000-00805f9b34fb").unwrap(),
         ];
-        start(services);
+        start(services).await;
     }
     #[test]
     fn test_connect() {

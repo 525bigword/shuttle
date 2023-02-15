@@ -1,19 +1,13 @@
-mod win;
+#[cfg(unix)]
 mod linux;
+#[cfg(windows)]
+mod win;
 
 
-pub enum OS {
-    Win,
-    Linux,
-    Mac
-}
+///不同平台同功能api
+/// Same function api on different platforms
+#[cfg(unix)]
+pub use linux::get_system_metrics as get_system_metrics;
+#[cfg(windows)]
+pub use win::get_system_metrics as get_system_metrics;
 
-impl OS {
-    pub fn get_system_metrics(&self)-> (i32,i32){
-        match self {
-            OS::Win => win::get_system_metrics(),
-            OS::Linux => todo!(),
-            OS::Mac => todo!(),
-        }
-    }
-}
