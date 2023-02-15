@@ -7,6 +7,8 @@ mod device;
 mod command;
 mod socket;
 mod event;
+#[path ="./os/mod.rs"]
+mod os;
 #[macro_use]
 extern crate lazy_static;
 

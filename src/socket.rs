@@ -165,6 +165,8 @@ impl Socket{
 #[cfg(test)]
 mod tests {
 
+    use winapi::um::winuser::GetSystemMetrics;
+
     use super::*;
 
     #[tokio::test]
@@ -180,6 +182,7 @@ mod tests {
     #[test]
     fn test_connect() {
         connect("127.0.0.1");
+
     }
 }
 
