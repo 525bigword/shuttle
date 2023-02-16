@@ -1,7 +1,5 @@
-#![allow(clippy::let_unit_value)]
 use bluest::{Adapter, Device, Uuid};
 use tokio::sync::RwLock;
-use std::time::Duration;
 use tokio_stream::StreamExt;
 
 lazy_static! {
@@ -61,8 +59,7 @@ pub async fn disconnect_device(device:&Device) {
 }
 
 // 锁定蓝牙设备
-pub async fn lock_device(services: &[Uuid]) -> (Vec<String>,Device) {
-    let device_id = {
+pub async fn get_device(services: &[Uuid]) -> (Vec<String>,Device) {
         let adapter = Adapter::default().await.unwrap();
         adapter.wait_available().await.unwrap();
         println!("looking for device");
@@ -77,28 +74,11 @@ pub async fn lock_device(services: &[Uuid]) -> (Vec<String>,Device) {
             device.name_async().await.as_deref().unwrap_or("(unknown)"),
             device.id()
         );
-
-        device.id()
-    };
-    println!("Time passes...");
-    tokio::time::sleep(Duration::from_secs(5)).await;
-    {
-        let adapter = Adapter::default().await.unwrap();
-        adapter.wait_available().await;
-
-        println!("re-opening previously found device");
-        let device = adapter.open_device(&device_id).await.unwrap();
-        println!(
-            "re-opened device: {} ({:?})",
-            device.name_async().await.as_deref().unwrap_or("(unknown)"),
-            device.id()
-        );
         let services=services.clone();
         for uuid in services {
             UUID_STR_VEC.write().await.push(uuid.to_string());
         }
         (UUID_STR_VEC.read().await.to_vec(),device)
-    }
 }
 
 #[cfg(test)]
@@ -119,7 +99,7 @@ mod tests {
             Uuid::parse_str("0000110c-0000-1000-8000-00805f9b34fb").unwrap(),
         ];
         let rt = tokio::runtime::Runtime::new().unwrap();
-        let future = lock_device(services);
+        let future = super::get_device(services);
         let (_services,device)=rt.block_on(future);
         device
     }

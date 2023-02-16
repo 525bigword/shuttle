@@ -3,12 +3,11 @@ use winapi::um::winuser::GetSystemMetrics;
 
 pub fn get_system_metrics() -> (i32,i32){
     use winapi::um::winuser::{SM_CXSCREEN, SM_CYSCREEN};
-    let mut x;
-    let mut y;
     unsafe {
-        x =GetSystemMetrics(SM_CXSCREEN);
-        y =GetSystemMetrics(SM_CYSCREEN);
-        (x,y)
+        (
+            GetSystemMetrics(SM_CXSCREEN)
+            ,GetSystemMetrics(SM_CYSCREEN)
+        )
     }
 }
 

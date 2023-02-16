@@ -31,6 +31,7 @@ async fn main() {
         Command::Start(_)=>{
             println!("len:{:?}",args);
             println!("len:{:?}",args[2]);
+            println!("len:{:?}",args[3]);
             // let mut  services:Vec<Uuid>=Vec::new();
             // services.push(Uuid::parse_str("0000110e-0000-1000-8000-00805f9b34fb").unwrap());
             // services.push(Uuid::parse_str("0000110b-0000-1000-8000-00805f9b34fb").unwrap());

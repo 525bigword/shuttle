@@ -1,30 +1,29 @@
 
 extern crate ws;
 use std::collections::HashMap;
-use std::sync::{ RwLock};
+use std::sync::{RwLock};
 
 use bluest::Uuid;
-use bluest::btuuid::services;
 use serde::{Deserialize, Serialize};
-use ws::util::Token;
 use ws::{listen, Message, Sender};
-use ws::{connect as ws_connect, CloseCode};
+use ws::{connect as ws_connect};
 
-use crate::device::{lock_device, UUID_STR_VEC};
+use crate::device::{get_device, UUID_STR_VEC};
 use crate::event::{watch_mouse, STATE};
 
+
 lazy_static! {
-    static ref SENDER_LIST: RwLock<HashMap<Token,Sender>> = RwLock::new(HashMap::new());
+    pub static ref ENCLOSURE_SOCKET:RwLock<HashMap<String,Sender>> = RwLock::new(HashMap::new());
 }
 pub async fn start(services: &[Uuid]) {
-    let (_uuid_str_vec,device)=lock_device(services).await;
+    let (_uuid_str_vec,device)=get_device(services).await;
     println!("已锁定设备:{}",device);
     let rt = tokio::runtime::Runtime::new().unwrap();
     let listen=listen("127.0.0.1:20426", |sender| {
         println!("out:{:?}",sender);
         let future = UUID_STR_VEC.read();
         let uuid=rt.block_on(future).to_vec();
-        let _ = &SENDER_LIST.write().unwrap().insert(sender.token(), sender.clone());
+        let _ = &ENCLOSURE_SOCKET.write().unwrap().insert(Direction::Left.into(), sender.clone());
         move |msg:Message| {
             println!("received msg: {}", msg);
             // let so:Socket=msg.to_string().as_str().into();
@@ -35,6 +34,9 @@ pub async fn start(services: &[Uuid]) {
                     sender.send(Message::Text(message.into()))
                 },
                 Socket::Other => sender.send(msg),
+                _=>{
+                    sender.send(msg)
+                }
             }
             
         }
@@ -78,8 +80,13 @@ pub fn connect(ip:&str) {
                     let future = UUID_STR_VEC.write();
                     let mut uuid=rt.block_on(future).to_vec();
                     uuid=str_list;
+                    //保存附件设备
+                    let _ = &ENCLOSURE_SOCKET.write().unwrap().insert(Direction::Right.into(), out.clone());
                 },
                 Socket::Other => todo!(),
+                _ =>{
+                    todo!()
+                }
             };
             Ok(())
         }
@@ -90,10 +97,10 @@ pub fn connect(ip:&str) {
 }
 
 
-fn string_to_uuid_vec(str_list:Vec<&str>) -> Vec<Uuid>{
+pub fn string_to_uuid_vec(str_list:Vec<String>) -> Vec<Uuid>{
     let mut uuid:Vec<Uuid>=Vec::new();
     for str in str_list {
-        uuid.push(Uuid::parse_str(str).unwrap());
+        uuid.push(Uuid::parse_str(str.as_str()).unwrap());
     };
     uuid
     // let services = &[
@@ -102,6 +109,35 @@ fn string_to_uuid_vec(str_list:Vec<&str>) -> Vec<Uuid>{
     //         Uuid::parse_str("0000111e-0000-1000-8000-00805f9b34fb").unwrap(),
     //         Uuid::parse_str("0000110c-0000-1000-8000-00805f9b34fb").unwrap(),
     //     ];
+}
+
+
+pub enum Direction {
+    Top,
+    Down,
+    Left,
+    Right,
+}
+impl From<Direction> for String {
+    fn from(d: Direction) -> String {
+        match d {
+            Direction::Top => "top".to_string(),
+            Direction::Down => "down".to_string(),
+            Direction::Left => "left".to_string(),
+            Direction::Right => "right".to_string(),
+        }
+    }
+}
+
+impl From<Direction> for &str {
+    fn from(d: Direction) -> &'static str {
+        match d {
+            Direction::Top => "top",
+            Direction::Down => "down",
+            Direction::Left => "left",
+            Direction::Right => "right",
+        }
+    }
 }
 
 #[derive(Debug,Serialize, Deserialize)]
@@ -124,6 +160,7 @@ impl From<Msg> for String {
 #[derive(Debug,Serialize, Deserialize)]
 pub enum Socket {
     LockDevice,
+    Connect,
     Other,
 }
 
