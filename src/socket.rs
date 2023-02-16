@@ -19,8 +19,8 @@ lazy_static! {
 pub async fn start(services: &[Uuid]) {
     let (_uuid_str_vec,device)=get_device(services).await;
     println!("已锁定设备:{}",device);
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    let listen=listen("127.0.0.1:20426", |sender| {
+    let listen=listen("192.168.31.103:20426", |sender| {
+        let rt = tokio::runtime::Runtime::new().unwrap();
         println!("out:{:?}",sender);
         let future = UUID_STR_VEC.read();
         let uuid=rt.block_on(future).to_vec();
