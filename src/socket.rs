@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::sync::{RwLock};
 
 use bluest::Uuid;
+use log::debug;
 use serde::{Deserialize, Serialize};
 use ws::{listen, Message, Sender};
 use ws::{connect as ws_connect};
@@ -59,6 +60,7 @@ pub fn connect(ip:&str) {
         message: format!(""),
         uuid_str_vec: vec![],
     }.into();
+    debug!("connect:{ip}");
     watch_mouse();
     println!("开始监控鼠标");
     if let Err(error) = ws_connect(format!("ws://{}:20426",ip), |out| {

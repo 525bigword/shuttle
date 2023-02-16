@@ -1,4 +1,4 @@
-use std::env;
+use std::env::{self, set_var};
 use bluest::Uuid;
 use tokio::sync::RwLock;
 
@@ -14,6 +14,8 @@ extern crate lazy_static;
 
 #[tokio::main]
 async fn main() {
+    set_var("RUST_LOG", "debug");
+    env_logger::init();
     let args: Vec<String> = env::args().collect();
     let arg1 = &args[1];
     println!("Searching for {}", arg1);
@@ -23,7 +25,8 @@ async fn main() {
     {
         Command::Connect(_)=>{
             if args.len()>2 {
-                Command::Connect(args[2].as_str()).run();
+                println!("{}",args[2]);
+                Command::Connect(args[2].as_str()).run().await;
                 return;
             }
             command.run();
