@@ -1,92 +1,92 @@
-
 extern crate ws;
 use std::collections::HashMap;
-use std::sync::{RwLock};
+use std::sync::RwLock;
 
 use bluest::Uuid;
-use log::debug;
+use log::{debug, info};
 use serde::{Deserialize, Serialize};
-use ws::{listen, Message, Sender};
-use ws::{connect as ws_connect};
+use serde_json::Error;
+use ws::connect as ws_connect;
+use ws::{listen, CloseCode, Message, Sender};
 
 use crate::device::{get_device, UUID_STR_VEC};
-use crate::event::{watch_mouse, STATE};
-
+use crate::event::watch_mouse;
 
 lazy_static! {
-    pub static ref ENCLOSURE_SOCKET:RwLock<HashMap<String,Sender>> = RwLock::new(HashMap::new());
+    pub static ref ENCLOSURE_SOCKET: RwLock<HashMap<String, Sender>> = RwLock::new(HashMap::new());
 }
-pub async fn start(services: &[Uuid]) {
-    let (_uuid_str_vec,device)=get_device(services).await;
-    println!("已锁定设备:{}",device);
-    let listen=listen("192.168.31.103:20426", |sender| {
+pub fn start(services: &[Uuid]) {
+    let (_uuid_str_vec, device) = get_device(services);
+    info!("已锁定设备:{}", device);
+    watch_mouse();
+    let listen = listen("127.0.0.1:20426", |sender| {
         let rt = tokio::runtime::Runtime::new().unwrap();
-        println!("out:{:?}",sender);
+        debug!("out:{:?}", sender);
         let future = UUID_STR_VEC.read();
-        let uuid=rt.block_on(future).to_vec();
-        let _ = &ENCLOSURE_SOCKET.write().unwrap().insert(Direction::Left.into(), sender.clone());
-        move |msg:Message| {
-            println!("received msg: {}", msg);
-            // let so:Socket=msg.to_string().as_str().into();
-            let mut message:Msg =serde_json::from_str(&msg.as_text().unwrap()).unwrap();
-            match message.socket {
-                Socket::LockDevice =>{
-                    message.uuid_str_vec=uuid.clone();
-                    sender.send(Message::Text(message.into()))
+        let uuid = rt.block_on(future).to_vec();
+        let _ = &ENCLOSURE_SOCKET
+            .write()
+            .unwrap()
+            .insert(Direction::Left.into(), sender.clone());
+        move |msg: Message| {
+            debug!("received msg: {}", msg);
+            let message_rusult: Result<Msg, Error> = serde_json::from_str(&msg.as_text().unwrap());
+            match message_rusult {
+                Ok(mut message) => match message.socket {
+                    Socket::LockDevice => {
+                        message.uuid_str_vec = uuid.clone();
+                        sender.send(Message::Text(message.into()))
+                    }
+                    Socket::Other => sender.send(msg),
+                    _ => sender.send(msg),
                 },
-                Socket::Other => sender.send(msg),
-                _=>{
-                    sender.send(msg)
-                }
+                Err(_) => sender.close(CloseCode::Policy),
             }
-            
         }
     });
     match listen {
-        Ok(_) => {
-            watch_mouse();
-            println!("开始监控鼠标");
-        },
-        Err(_) => {
-            let mut state=STATE.write().unwrap();
-            *state=1_u8;
-        },
+        Ok(_) => {println!("1")},
+        Err(_) => {println!("2")},
     }
 }
 
-pub fn connect(ip:&str) {
-    let msg:String=Msg{
-        socket:Socket::LockDevice,
+pub fn connect(ip: &str) {
+    let msg: String = Msg {
+        socket: Socket::LockDevice,
         message: format!(""),
         uuid_str_vec: vec![],
-    }.into();
+    }
+    .into();
     debug!("connect:{ip}");
     watch_mouse();
-    println!("开始监控鼠标");
-    if let Err(error) = ws_connect(format!("ws://{}:20426",ip), |out| {
+    info!("开始追踪鼠标");
+    if let Err(error) = ws_connect(format!("ws://{}:20426", ip), |out| {
         // 将WebSocket打开时要发送的消息排队
         if out.send(msg.as_str()).is_err() {
-            println!("Websocket无法初始消息排队")
+            info!("Websocket无法初始消息排队")
         } else {
-            println!("连接成功");
+            info!("连接成功");
         }
         // 处理程序需要获取out的所有权，因此我们使用move
-        move |msg:Message| {
+        move |msg: Message| {
             // 处理在此连接上接收的消息
             println!("Client 收到消息 '{}'. ", msg);
-            let  message:Msg =serde_json::from_str(&msg.as_text().unwrap()).unwrap();
-            let _=match message.socket {
+            let message: Msg = serde_json::from_str(&msg.as_text().unwrap()).unwrap();
+            let _ = match message.socket {
                 Socket::LockDevice => {
-                    let str_list:Vec<String> =message.uuid_str_vec;
+                    let str_list: Vec<String> = message.uuid_str_vec;
                     let rt = tokio::runtime::Runtime::new().unwrap();
                     let future = UUID_STR_VEC.write();
-                    let mut uuid=rt.block_on(future).to_vec();
-                    uuid=str_list;
+                    let mut uuid = rt.block_on(future).to_vec();
+                    uuid = str_list;
                     //保存附件设备
-                    let _ = &ENCLOSURE_SOCKET.write().unwrap().insert(Direction::Right.into(), out.clone());
-                },
+                    let _ = &ENCLOSURE_SOCKET
+                        .write()
+                        .unwrap()
+                        .insert(Direction::Right.into(), out.clone());
+                }
                 Socket::Other => todo!(),
-                _ =>{
+                _ => {
                     todo!()
                 }
             };
@@ -98,12 +98,11 @@ pub fn connect(ip:&str) {
     }
 }
 
-
-pub fn string_to_uuid_vec(str_list:Vec<String>) -> Vec<Uuid>{
-    let mut uuid:Vec<Uuid>=Vec::new();
+pub fn string_to_uuid_vec(str_list: Vec<String>) -> Vec<Uuid> {
+    let mut uuid: Vec<Uuid> = Vec::new();
     for str in str_list {
         uuid.push(Uuid::parse_str(str.as_str()).unwrap());
-    };
+    }
     uuid
     // let services = &[
     //         Uuid::parse_str("0000110e-0000-1000-8000-00805f9b34fb").unwrap(),
@@ -112,7 +111,6 @@ pub fn string_to_uuid_vec(str_list:Vec<String>) -> Vec<Uuid>{
     //         Uuid::parse_str("0000110c-0000-1000-8000-00805f9b34fb").unwrap(),
     //     ];
 }
-
 
 pub enum Direction {
     Top,
@@ -142,16 +140,14 @@ impl From<Direction> for &str {
     }
 }
 
-#[derive(Debug,Serialize, Deserialize)]
-pub struct Msg{
-    pub socket:Socket,
-    pub message:String,
-    pub uuid_str_vec:Vec<String>,
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Msg {
+    pub socket: Socket,
+    pub message: String,
+    pub uuid_str_vec: Vec<String>,
 }
 
-impl Msg {
-   
-}
+impl Msg {}
 
 impl From<Msg> for String {
     fn from(msg: Msg) -> String {
@@ -159,17 +155,17 @@ impl From<Msg> for String {
     }
 }
 
-#[derive(Debug,Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Socket {
     LockDevice,
     Connect,
     Other,
 }
 
-impl Socket{
+impl Socket {
     fn message_to_socket(socket: &Message) -> Self {
-        let LockDevice =Message::Text("LockDevice".to_string());
-        let Other =Message::Text("Other".to_string());
+        let LockDevice = Message::Text("LockDevice".to_string());
+        let Other = Message::Text("Other".to_string());
         match socket {
             // "LockDevice"=>Socket::LockDevice,
             // _=> todo!(),
@@ -199,28 +195,23 @@ impl Socket{
 //     }
 // }
 
-
-
 #[cfg(test)]
 mod tests {
-
 
     use super::*;
 
     #[tokio::test]
     async fn test_start() {
-        let services= &[
+        let services = &[
             Uuid::parse_str("0000110e-0000-1000-8000-00805f9b34fb").unwrap(),
             Uuid::parse_str("0000110b-0000-1000-8000-00805f9b34fb").unwrap(),
             Uuid::parse_str("0000111e-0000-1000-8000-00805f9b34fb").unwrap(),
             Uuid::parse_str("0000110c-0000-1000-8000-00805f9b34fb").unwrap(),
         ];
-        start(services).await;
+        start(services)
     }
     #[test]
     fn test_connect() {
         connect("127.0.0.1");
-
     }
 }
-

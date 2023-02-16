@@ -4,6 +4,7 @@ use std::{
     time::Duration, collections::HashMap,
 };
 
+use log::{info, debug};
 use mouse_position::mouse_position::Mouse;
 use ws::{Message, Sender};
 
@@ -25,27 +26,31 @@ fn get_mouse_coordinate() -> Result<(i32, i32), &'static str> {
     }
 }
 
-pub async fn watch_mouse() {
+pub  fn watch_mouse() {
     let mut state = STATE.write().unwrap();
     *state = 0_u8;
     thread::spawn(|| {
         while STATE.read().unwrap().eq(&0) {
             let (x, y) = get_mouse_coordinate().unwrap();
-            println!("{},{}", x, y);
+            debug!("{},{}", x, y);
             let (width, height) = get_system_metrics();
             let sender_map = ENCLOSURE_SOCKET.read().unwrap();
             //左
             if x == 0 {
                 changing(&sender_map,Direction::Left);
+                debug!("达到左边界");
             } else if x == width-1 {
                 //右
                 changing(&sender_map,Direction::Right);
-            } else if y == 0 {
+                debug!("达到右边界");
+            } else if y == height-1 {
                 //下
                 changing(&sender_map,Direction::Down);
-            } else if y == height-1 {
+                debug!("达到下边界");
+            } else if y == 0 {
                 //上
                 changing(&sender_map,Direction::Top);
+                debug!("达到上边界");
             }
             thread::sleep(Duration::from_millis(500));
         }
@@ -63,11 +68,9 @@ fn changing(sender_map:&HashMap<String,Sender>,key:Direction) {
         let uuid_str = rt.block_on(future).to_vec();
         let uuid_list = string_to_uuid_vec(uuid_str);
         //获取蓝牙设备
-        let future = get_device(&uuid_list);
-        let (str, device) = rt.block_on(future);
+        let (str, device) = get_device(&uuid_list);
         //断开蓝牙
-        let future=disconnect_device(&device);
-        rt.block_on(future);
+        disconnect_device(&device);
         //发起通知
         let message: Msg = Msg {
             socket: Socket::Connect,

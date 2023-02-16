@@ -10,13 +10,13 @@ pub enum Command<'a> {
 }
 
 impl Command<'_> {
-    pub async fn run(&self){
+    pub fn run(&self){
         match self {
-            Command::Scan => scan_device().await,
+            Command::Scan => scan_device(),
             Command::Start(device) =>{
                 // print!("device:{}",device);
                 match device {
-                    Some(i) => start(i).await,
+                    Some(i) => start(i),
                     None => panic!("缺少设备号！"),
                 };
                 
