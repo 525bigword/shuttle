@@ -4,13 +4,16 @@ use bluest::{Adapter, Device, Uuid};
 use log::info;
 use tokio::sync::RwLock;
 use tokio_stream::StreamExt;
-
+use tokio::runtime::{Runtime};
 lazy_static! {
     pub static ref UUID_STR_VEC: RwLock<Vec<String>> = RwLock::new(Vec::new());
 }
 
 pub fn scan_device() {
-    let t = thread::spawn(|| async {
+    println!(".......................");
+    let rt = Runtime::new().unwrap();
+
+    let future = async {
         let adapter = Adapter::default()
             .await
             .ok_or("Bluetooth adapter not found")
@@ -21,24 +24,24 @@ pub fn scan_device() {
         let mut scan = adapter.scan(&[]).await.unwrap();
         info!("scan started");
         while let Some(discovered_device) = scan.next().await {
-            println!(
-                "{:?}:{:?}:{:?}",
+            info!(
+                "name:{:?}----->services：{:?}",
                 discovered_device
                     .device
                     .name_async()
                     .await
                     .unwrap_or("undefind".to_string()),
-                discovered_device.device.id(),
-                discovered_device.adv_data
+                // discovered_device.device.id(),
+                discovered_device.adv_data.services
             );
         }
-    });
-    t.join();
+    };
+    rt.block_on(future);
 }
 
 // 连接蓝牙
 pub fn connect_device(device: &Device) {
-    let rt = tokio::runtime::Runtime::new().unwrap();
+    let rt = Runtime::new().unwrap();
     let future = Adapter::default();
     let adapter=rt.block_on(future).ok_or("Bluetooth adapter not found")
     .unwrap();
@@ -47,7 +50,7 @@ pub fn connect_device(device: &Device) {
 
 // 断开蓝牙
 pub fn disconnect_device(device: &Device) {
-    let rt = tokio::runtime::Runtime::new().unwrap();
+    let rt = Runtime::new().unwrap();
     let future = Adapter::default();
     let adapter=rt.block_on(future).ok_or("Bluetooth adapter not found")
     .unwrap();
@@ -56,7 +59,7 @@ pub fn disconnect_device(device: &Device) {
 
 // 锁定蓝牙设备
 pub fn get_device(services: &[Uuid]) -> (Vec<String>, Device) {
-    let rt = tokio::runtime::Runtime::new().unwrap();
+    let rt = Runtime::new().unwrap();
     let future= async {
         let adapter = Adapter::default().await.unwrap();
         adapter.wait_available().await.unwrap();
