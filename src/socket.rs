@@ -17,7 +17,7 @@ lazy_static! {
 }
 pub fn start(services: &[Uuid]) {
     let (_uuid_str_vec, device) = get_device(services);
-    info!("已锁定设备:{}", device);
+    info!("Device locked:{}", device);
     watch_mouse();
     let listen = listen("127.0.0.1:20426", |sender| {
         let rt = tokio::runtime::Runtime::new().unwrap();

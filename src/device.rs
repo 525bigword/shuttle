@@ -78,14 +78,16 @@ pub fn get_device(services: &[Uuid]) -> (Vec<String>, Device) {
             device.name_async().await.as_deref().unwrap_or("(unknown)"),
             device.id()
         );
-        let services = services.clone();
+        let services = services.to_vec();
+        let mut uuid_str=UUID_STR_VEC.write().await;
         for uuid in services {
-            UUID_STR_VEC.write().await.push(uuid.to_string());
+            uuid_str.push(uuid.to_string());
         }
-        (UUID_STR_VEC.read().await.to_vec(),device)
+        (uuid_str.to_vec(),device)
     };
-    rt.block_on(future)
-
+    let (a,b)=rt.block_on(future);
+    println!("{:?}:{}",a,b);
+    (a,b)
 }
 
 #[cfg(test)]

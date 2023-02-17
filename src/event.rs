@@ -29,6 +29,7 @@ fn get_mouse_coordinate() -> Result<(i32, i32), &'static str> {
 pub  fn watch_mouse() {
     let mut state = STATE.write().unwrap();
     *state = 0_u8;
+    println!("111111111111");
     thread::spawn(|| {
         while STATE.read().unwrap().eq(&0) {
             let (x, y) = get_mouse_coordinate().unwrap();
