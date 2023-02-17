@@ -1,7 +1,5 @@
 use std::env::{self, set_var};
-use bluest::Uuid;
 use log::debug;
-use tokio::sync::RwLock;
 
 use crate::{command::Command, socket::string_to_uuid_vec};
 mod device;

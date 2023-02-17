@@ -983,6 +983,7 @@ name = "shuttle"
 version = "0.1.0"
 dependencies = [
  "bluest",
+ "core-graphics",
  "env_logger",
  "lazy_static",
  "log",
